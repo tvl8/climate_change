@@ -1,0 +1,13 @@
+---
+title: 'GitHub Repository'
+format:
+  html:
+    embed-resources: true
+    toc: true
+jupyter: python3
+execute:
+  echo: false
+---
+
+A copy of my repository can be found here:  
+https://github.com/tvl8/climate_change/tree/main

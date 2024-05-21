@@ -1,0 +1,480 @@
+---
+title: ''
+format:
+  html:
+    embed-resources: true
+    toc: true
+jupyter: python3
+execute:
+  echo: false
+---
+
+# Introduction
+
+The effects of climate change are rapidly becoming more apparent in our daily lives and in the data collected by researchers from the Southwestern Utah Group (SEUG) of National Parks. Over the past decade, there have been increasing reports of extreme weather, such as flooding, drought, hurricanes, and other natural diasasters. These natural diasasters have disrupted livelihoods and agricultural systems. In an effort by the Southwestern Utah Group (SEUG) of National Parks, researchers collected data around the Natural Bridges National Monument. This data included parameters, such as temperature, precipitation, volumetric water content in soil, and agricultural metrics (such as tree canopy coverage, herbaceous coverage, percentage of bare ground, plant litter, shrub coverage).  
+
+
+```{python, echo=False}
+import pandas as pd
+import numpy as np
+
+import folium
+from folium.plugins import HeatMapWithTime
+from sklearn.preprocessing import StandardScaler
+from matplotlib import style
+
+import seaborn as sns 
+import seaborn.objects as so
+```
+
+```{python, echo=False}
+cpalette = sns.color_palette(['#332288','#E40B5A','#4C91D1','#D29E08','#6B892F'])
+sns.set_palette(cpalette)
+sns.set_style(
+    style='darkgrid')
+
+updates = {
+    'axes.titlesize': 28, 
+    'axes.labelsize': 19, 
+    'axes.titlelocation': 'center', 
+    'text.color': '172626', #shade of dark cyan
+    'mathtext.fontset': 'dejavuserif',
+    'axes.labelcolor': 'red',
+    'axes.edgecolor': '9AC1C1', #shade of dark cyan
+    'legend.facecolor': 'white', 
+    'legend.edgecolor': '558B8B', #shade of dark cyan
+    'axes.facecolor': 'D9E8E8', #shade of dark cyan
+    'figure.facecolor': '99C2C2', #shade of dark cyan
+    'font.family': 'Verdana', 
+    'font.sans-serif': "Verdana",
+    'grid.color': 'F2F7F7', #shade of dark cyan
+    'grid.linestyle': '-',   
+    'grid.linewidth': 1,
+    'legend.loc': 'lower right'}
+
+# remember to add this update to seaborn to update the point colors
+sns.set_palette(cpalette)    
+
+#update with new specs, layer them by merging the dictionaries
+new_specs = {**sns.axes_style('darkgrid'), **updates} 
+
+```
+
+```{python, echo=False}
+climate = pd.read_csv('../data/NABR_historic.csv')
+#print(climate.info())
+#print(climate.head())
+```
+
+```{python, echo=False}
+climate_near = pd.read_csv('../data/nearterm_data_2020-2024.csv')
+#print(climate_near.info())
+#print(climate_near.head())
+```
+
+```{python, echo=False}
+climate_main = pd.concat([climate, climate_near], ignore_index=True)
+#print(climate_main.shape)
+#print(climate_main.info())
+```
+
+```{python, echo=False}
+# Create a list of years for the time index
+climate2 = climate_main[['lat', 'long', 'year', 'T_Annual']]
+climate2 = climate2.dropna()
+
+# find average per lat and long from 1980 to 2000
+climate3 = climate2[climate2['year'] <= 2000]
+climate3 = climate3.groupby(['lat', 'long'])['T_Annual'].max().reset_index()
+climate3 = climate3.rename(columns={'T_Annual': 'T_Annual_Max'})
+#print(climate3)
+```
+
+```{python, echo=False}
+climate2 = climate2.groupby(['year', 'lat', 'long'])['T_Annual'].max().reset_index()
+climate2 = pd.merge(climate2, climate3, on=['lat', 'long'], how='left')
+climate2 = climate2.dropna()
+#print(climate2.head())
+```
+
+```{python, echo=False}
+climate2['T_delta'] = climate2['T_Annual'] - climate2['T_Annual_Max']
+#print(climate2.head())
+```
+
+```{python, echo=False}
+#climate2['T_delta_normal'] = (climate2['T_delta'] - climate2['T_delta'].min()) / (climate2['T_delta'].max() - climate2['T_delta'].min())
+scaler = StandardScaler()
+climate2['T_delta_normal'] = scaler.fit_transform(climate2[['T_delta']])
+#print(climate2.head())
+```
+
+```{python, echo=False}
+climate2 = climate2[climate2['year']>=1983]
+#print(climate2.tail())
+```
+
+# Increase in Extreme High Annual Temperatures
+
+From 2021 to 2024, the Natural Bridges National Monument had the highest temperatures recorded ranging from 24 to 26 degrees celsius. 
+
+```{python, echo=False}
+#| fig-cap: "Beginning with data in 1983 and ending in 2024, each maximum annual temperature was compared to the maximum temperature between 1980 to 2000. The red color increases in intensity as the change in temperature increases. The most remarkable difference is seen by comparing 1983 and 2024."
+
+years = climate2['year'].unique()
+years.sort()
+
+heat_df = []
+for year in years:
+    # Filter data for this iteration of year
+    year_df = climate2[climate2['year'] == year]
+    # Create a list of [lat, lon, T_delta_normal] for this iteration of year
+    heat_df.append(year_df[['lat', 'long', 'T_delta_normal']].values.tolist())
+
+# Initialize base layer of Folium map
+m = folium.Map(location=[climate2['lat'].mean(), climate2['long'].mean()], control_scale=True, zoom_start=13)
+
+# Add heat map layer
+HeatMapWithTime(
+    heat_df,
+    index=years.tolist(),
+    auto_play=True,
+    min_speed=3.5,
+    max_opacity=0.7,
+    radius=25
+).add_to(m)
+
+m
+```
+
+
+
+The increase in extreme weather is striking with a steep increase in extreme temperature between 2021 to 2024. According to NASA, one-degree is global temperature change has a significant impact on the warming of oceans, the atmosphere, and the land masses. For example, NASA stated that "A five-degree drop was enough to bury a large part of North America under a towering mass of ice 20,000 years ago." 
+
+```{python, echo=False}
+#| fig-cap: "The average of the highest annual temperature per year was calculated. Alarmingly, there is a steep increase in extreme temperature between 2021 to 2024."
+import pandas as pd
+import matplotlib.pyplot as plt
+
+
+average_temp_per_year = climate2.groupby('year')['T_Annual'].mean()
+
+
+plt.figure(figsize=(8, 6))  
+plt.plot(average_temp_per_year.index, average_temp_per_year.values, marker='o', linestyle='-')
+plt.title('Highest Annual Temperature from 1983 to 2024', fontsize=28)
+plt.xlabel('Year')
+plt.ylabel('Highest Annual Temperature (in Celsius)')
+plt.grid(True)
+plt.xticks(average_temp_per_year.index, rotation=45) 
+plt.tight_layout()  
+plt.show()
+```
+
+```{python, echo=False}
+climate2_per = climate_main[['lat', 'long', 'year', 'PPT_Annual']]
+climate2_per = climate2_per.dropna()
+
+# find average annual PPT per lat and long from 1980 to 2000
+climate3_per = climate2_per[climate2_per['year'] <= 2000]
+climate3_per = climate3_per.groupby(['lat', 'long'])['PPT_Annual'].mean().reset_index()
+climate3_per = climate3_per.rename(columns={'PPT_Annual': 'PPT_Annual_Avg'})
+#print(climate3_per)
+```
+
+```{python, echo=False}
+# find average PPT_Annual per year, lat, long
+climate2_per = climate2_per.groupby(['year', 'lat', 'long'])['PPT_Annual'].mean().reset_index()
+climate2_per = pd.merge(climate2_per, climate3_per, on=['lat', 'long'], how='left')
+climate2_per = climate2_per.dropna()
+#print(climate2_per.head())
+```
+
+```{python, echo=False}
+# find change
+climate2_per['PPT_delta'] = climate2_per['PPT_Annual'] - climate2_per['PPT_Annual_Avg']
+#print(climate2_per.head())
+```
+
+```{python, echo=False}
+# normalize data
+scaler = StandardScaler()
+climate2_per['PPT_delta_normal'] = scaler.fit_transform(climate2_per[['PPT_delta']])
+#print(climate2_per.head())
+```
+
+```{python, echo=False}
+climate2_per = climate2_per[climate2_per['year']>=1983]
+```
+
+# Changing Precipitation Patterns
+
+Precipitation patterns have also been changing in this region. As seen in the map below, there are fluctuations in the precipitation patterns from 1983 to 2024, but overall there is a downward trend in the average annual precipitation.
+
+```{python, echo=False}
+#| fig-cap: "Beginning with data in 1983 and ending in 2024, each average annual precipitation was compared to the average annual precipitation between 1980 to 2000. The blue color decreases in intensity as precipitation decreases. The most remarkable difference is seen by comparing 1983 and 2024."
+years = climate2_per['year'].unique()
+years.sort()
+
+heat_df = []
+for year in years:
+    year_df = climate2_per[climate2_per['year'] == year]
+    heat_df.append(year_df[['lat', 'long', 'PPT_delta_normal']].values.tolist())
+
+# Create a base map
+m = folium.Map(location=[climate2_per['lat'].mean(), climate2_per['long'].mean()], control_scale=True, zoom_start=13)
+
+# Add heatmap with time plugin
+HeatMapWithTime(
+    heat_df,
+    index=years.tolist(),
+    auto_play=True,
+    min_speed=3.5,
+    max_opacity=0.7,
+    gradient = {0.25: 'red', 0.5: 'yellow', 0.75: 'green', 1: 'blue'},
+    radius=25
+).add_to(m)
+
+m
+```
+
+
+
+```{python, echo=False}
+average_prec_per_year = climate2_per.groupby('year')['PPT_Annual'].mean()
+
+
+plt.figure(figsize=(8, 6))  
+plt.plot(average_prec_per_year.index, average_prec_per_year.values, marker='o', linestyle='-')
+plt.title('Annual Precipitation from 1983 to 2024', fontsize=28)
+plt.xlabel('Year')
+plt.ylabel('Average Annual Precipitation')
+plt.grid(True)
+plt.xticks(average_prec_per_year.index, rotation=45) 
+plt.tight_layout()  
+plt.show()
+```
+
+
+```{python, echo=False}
+import pandas as pd
+import numpy as np
+import seaborn as sns
+import matplotlib.pyplot as plt
+from sklearn.preprocessing import StandardScaler
+```
+
+```{python, echo=False}
+from matplotlib import style
+```
+
+```{python, echo=False}
+climate = pd.read_csv('../data/NABR_historic.csv')
+#print(climate.info())
+#print(climate.head())
+```
+
+```{python, echo=False}
+climate_near = pd.read_csv('../data/nearterm_data_2020-2024.csv')
+#print(climate_near.info())
+#print(climate_near.head())
+```
+
+```{python, echo=False}
+climate_main = pd.concat([climate, climate_near], ignore_index=True)
+#print(climate_main.shape)
+#print(climate_main.info())
+```
+
+```{python, echo=False}
+#print(climate_main['RCP'].unique())
+```
+
+```{python, echo=False}
+climate_main = climate_main.drop(columns=['TimePeriod', 'scenario', 'RCP'])
+scaler = StandardScaler()
+climate_main_normal = scaler.fit_transform(climate_main)
+climate_main = pd.DataFrame(climate_main_normal, columns=climate_main.columns)
+```
+
+
+
+```{python, echo=False}
+climate_main = climate_main.rename(columns={'Ann_Herb': 'annual herb', 'Bare': 'bare ground', 'Herb': 'herb',
+       'Litter': 'plant litter', 'Shrub': 'shurbs', 'DrySoilDays_Summer_whole': 'dry soil days' , 'Evap_Summer': 'evap in summer',
+       'ExtremeShortTermDryStress_Summer_whole': 'extreme dry soil', 'FrostDays_Winter': 'frost days in winter',
+       'NonDrySWA_Summer_whole': 'non-dry soil water', 'PPT_Winter': 'PPT Winter', 'PPT_Summer': 'PPT Summer', 
+       'PPT_Annual': 'PPT Annual',
+       'T_Winter': 'Temp Winter', 'T_Summer': 'Temp Summer', 'T_Annual': 'Temp Annual', 'Tmax_Summer': 'Max Temp Summer', 
+       'Tmin_Winter': 'Min Temp Winter',
+       'VWC_Winter_whole': 'VWC Winter', 'VWC_Spring_whole': 'VWC Spring', 'VWC_Summer_whole': 'VWC Summer',
+       'VWC_Fall_whole': 'VWC Fall'})
+```
+
+```{python, echo=False}
+#climate_main1 = climate_main.drop(columns=['TimePeriod', 'scenario'])
+climate_main1 = climate_main.drop(columns=['Min Temp Winter', 'VWC Winter', 'VWC Spring',
+                                          'VWC Summer', 'VWC Fall',
+                                          'non-dry soil water', 'frost days in winter',
+                                          'extreme dry soil',
+                                          'evap in summer', 'dry soil days'])
+
+climate_main1 = climate_main1.dropna()
+#print(climate_main1.shape)
+#print(climate_main1.info())
+```
+
+```{python, echo=False}
+climate_main2 = climate_main.drop(columns=['PPT Winter', 'PPT Summer', 'PPT Annual',
+                                          'Temp Winter', 'Temp Summer',
+                                          'Temp Annual', 'Max Temp Summer'])
+#climate_main2_normal = scaler.fit_transform(climate_main2)
+#climate_main2= pd.DataFrame(climate_main2_normal, columns=climate_main2.columns)
+#climate_main2 = climate_main2.dropna()
+#print(climate_main2.shape)
+#print(climate_main2.info())
+```
+
+```{python, echo=False}
+corr_matrix = climate_main.dropna()
+#print(corr_matrix.info())
+```
+
+```{python, echo=False}
+
+
+#corr_matrix = corr_matrix.corr(method='pearson')
+
+#sns.heatmap(corr_matrix, annot=True, cmap='coolwarm', center=0)
+#plt.show()
+```
+
+# Impact on Precipitation and Water Content in Soil
+
+Changes in annual temperature and precipitation may have impacts on other environmental factors. In the Pearson Correlation Plots below, subtle relationships are seen between temperature and precipitation to volumetric water content (VWC) and water available in dry soil. 
+
+```{python, echo=False}
+#| fig-cap: "The increasing intensity of the red color indicates a strong positive relationship while the blue color indicates an inverse relationship."
+corr_matrix1 = climate_main1.corr(method='pearson')
+
+sns.heatmap(corr_matrix1, annot=True, cmap='coolwarm', center=0)
+plt.show()
+```
+
+
+```{python, echo=False}
+#| fig-cap: "The increasing intensity of the red color indicates a strong positive relationship while the blue color indicates an inverse relationship."
+corr_matrix2 = climate_main2.corr(method='pearson')
+
+sns.heatmap(corr_matrix2, annot=True, cmap='coolwarm')
+plt.show()
+```
+
+
+
+
+```{python, echo=False}
+#print(climate_main2.info())
+```
+
+```{python, echo=False}
+
+climate_main2_mean = climate_main2.groupby(['long', 'lat', 'year']).agg({
+    'non-dry soil water': 'mean',
+    'VWC Winter': 'mean',
+    'VWC Spring': 'mean',
+    'VWC Summer': 'mean',
+    'VWC Fall': 'mean',
+}).reset_index()
+```
+
+```{python, echo=False}
+#print(climate_main2_mean.head())
+```
+
+
+The Pearson correlation matrix show the beginnings of the impact of changes in temperature and precipitation. 
+
+
+```{python, echo=False}
+#| fig-cap: "This figure takes a closer look at the relationship between non-dry soil water availability during the summer."
+import plotly.graph_objects as go
+import pandas as pd
+
+
+fig = go.Figure(
+    data=go.Splom(
+        dimensions=[
+            dict(label="non-dry soil water", values=climate_main2["non-dry soil water"]),
+            dict(label="VWC Winter", values=climate_main2["VWC Winter"]),
+            dict(label="VWC Spring", values=climate_main2["VWC Spring"]),
+            dict(label="VWC Summer", values=climate_main2["VWC Summer"]),
+            dict(label="VWC Fall", values=climate_main2["VWC Fall"]),
+        ],
+        showupperhalf=False,
+        marker=dict(
+            showscale=False,
+            line_color="white",
+            line_width=0.5,
+        ),
+    )
+)
+
+fig.update_layout(
+    title="Relationship between Non-dry Soil Water Availability and Seasonal VWC",
+    hovermode="closest",
+    width=800,
+    height=800,
+)
+
+#fig.theme(style.library[""])
+
+fig.show()
+```
+
+
+In this parallel coordinates plot, the extreme values at above 3.5 show a relationship to a decrease in volumetric water content (VWC) in winter, spring, summer, and fall. According to Sumon Datta et. al., VWC can influence plant growth, soil temperature, transport of chemicals and groundwater recharge.
+
+```{python, echo=False}
+#| fig-cap: "By scrolling over the axis, a closer look at the relationship between extreme dry soil and VWC."
+fig = go.Figure(data=
+    go.Parcoords(
+        line = dict(#color = df['species_id'],
+                   colorscale = [[0,'purple'],[0.5,'lightseagreen'],[1,'gold']]),
+        dimensions = list([
+            dict(range = [0,6],
+                constraintrange = [4,6],
+                label="extreme dry soil", values=climate_main2["extreme dry soil"]),
+            dict(range = [0,6],
+                label="VWC Winter", values=climate_main2["VWC Winter"]),
+            dict(range = [0,6],
+                label="VWC Spring", values=climate_main2["VWC Spring"]),
+            dict(range = [0,6],
+                label="VWC Summer", values=climate_main2["VWC Summer"]),
+            dict(range = [0,6],
+                label="VWC Fall", values=climate_main2["VWC Fall"])
+        ])
+    )
+)
+
+fig.update_layout(
+    plot_bgcolor = 'white',
+    paper_bgcolor = 'white',
+    height = 450
+)
+
+fig.show()
+
+```
+
+# Conclusion
+
+The data collected by the Southwestern Utah Group (SEUG) of National Parks shows the striking increase in extreme high temperatures, changes in precipitation, and subtle changes in water content in soil. These patterns have profound implications on our ecosystems. In an article by NASA, even one degree of temperature change can have catatrophic effects on the global ecosytem. Changes in temperature and precipitation may have negative impacts on our agricultural systems, which may also cause stress and strain on our future food sytems. It is critical that policy makers act urgently to reverse the effects of climate change. 
+
+
+# Referenes
+
+1. NASA. (n.d.). Effects - NASA science. NASA. https://science.nasa.gov/climate-change/effects/ 
+2. NASA. (n.d.-b). World of change: Global temperatures. NASA. https://earthobservatory.nasa.gov/world-of-change/global-temperatures
+3. Datta, S, et. al. (2018, August 1). Understanding soil water content and thresholds for irrigation management - Oklahoma State University. Understanding Soil Water Content and Thresholds for Irrigation Management | Oklahoma State University. https://extension.okstate.edu/fact-sheets/understanding-soil-water-content-and-thresholds-for-irrigation-management.html#:~:text=The%20volumetric%20water%20content%20is,water%20per%20foot%20of%20soil. 
+

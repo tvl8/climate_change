@@ -1,0 +1,12 @@
+{
+  "hash": "cc0acf36e37e9bf27a006981e93d69e9",
+  "result": {
+    "engine": "jupyter",
+    "markdown": "---\ntitle: GitHub Repository\nformat:\n  html:\n    embed-resources: true\n    toc: true\nexecute:\n  echo: false\n---\n\nA copy of my repository can be found here:  \nhttps://github.com/tvl8/climate_change/tree/main\n\n",
+    "supporting": [
+      "repo_files"
+    ],
+    "filters": [],
+    "includes": {}
+  }
+}
